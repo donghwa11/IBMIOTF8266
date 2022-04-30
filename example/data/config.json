@@ -2,11 +2,11 @@
    "meta":{
       "pubInterval":"5000"
    },
-   "ssid":"yPhone",
-   "w_pw":"passw0rd",
-   "org":"m1urkr",
-   "devType":"vDev",
-   "devId":"vValve",
-   "token":"passw0rd",
+   "ssid":"iptime",
+   "w_pw":"yang6808",
+   "org":"rzojr8",
+   "devType":"esp8266",
+   "devId":"yang_sub",
+   "token":"arcturusb94",
    "config":"done"
 }

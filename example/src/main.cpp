@@ -7,7 +7,6 @@ String user_html = ""
     "<p><input type='text' name='meta.yourVar' placeholder='Your Custom Config'>";
                     ;
 // for meta.XXXXX, this var is the C variable to hold the XXXXX
-int             customVar1;
 // USER CODE EXAMPLE : your custom config variable
 
 char*               ssid_pfix = (char*)"IOTValve";
@@ -19,7 +18,7 @@ void publishData() {
     JsonObject data = root.createNestedObject("d");
 
 // USER CODE EXAMPLE : command handling
-    data["valve"] = digitalRead(RELAY) == 1 ? "on" : "off";
+    data["valve"] = digitalRead(RELAY) ? "on" : "off";
 // USER CODE EXAMPLE : command handling
 
     serializeJson(root, msgBuffer);
@@ -33,9 +32,9 @@ void handleUserCommand(JsonDocument* root) {
 // code if any of device status changes to notify the change
     if(d.containsKey("valve")) {
         if (strcmp(d["valve"], "on")) {
-            digitalWrite(RELAY, LOW);
-        } else {
             digitalWrite(RELAY, HIGH);
+        } else {
+            digitalWrite(RELAY, LOW);
         }
         lastPublishMillis = - pubInterval;
     }
@@ -57,7 +56,6 @@ void message(char* topic, byte* payload, unsigned int payloadLength) {
 // USER CODE EXAMPLE : meta data update
 // If any meta data updated on the Internet, it can be stored to local variable to use for the logic
 // in cfg["meta"]["XXXXX"], XXXXX should match to one in the user_html
-        customVar1 = cfg["meta"]["yourVar"];
 // USER CODE EXAMPLE
     } else if (!strncmp(commandTopic, topic, cmdBaseLen)) {            // strcmp return 0 if both string matches
         handleUserCommand(&root);
