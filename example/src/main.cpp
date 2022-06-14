@@ -1,5 +1,8 @@
 #include <Arduino.h>
 #include <IBMIOTF8266.h>
+#include <DHTesp.h>
+#include <LiquidCrystal_PCF8574.h>
+#include <Wire.h>
 
 String user_html = ""
 // USER CODE EXAMPLE : your custom config variable 
@@ -7,11 +10,36 @@ String user_html = ""
     "<p><input type='text' name='meta.yourVar' placeholder='Your Custom Config'>";
                     ;
 // for meta.XXXXX, this var is the C variable to hold the XXXXX
+int             customVar1;
 // USER CODE EXAMPLE : your custom config variable
 
 char*               ssid_pfix = (char*)"IOTValve";
 unsigned long       lastPublishMillis = - pubInterval;
-const int           RELAY = 15;
+
+LiquidCrystal_PCF8574 lcd(0x27);
+DHTesp dht;
+
+#define DHTPIN 14
+#define RELAY 16 // with pump
+#define REDPIN 13
+#define BLUEPIN 2
+#define GREENPIN 12
+#define ILLUMIPIN 0
+
+unsigned long last_pump_mil = 0;
+bool pump_on = 0;
+unsigned long lastDHTReadMillis = 0;
+char tdata[16]; // display string
+char hdata[16];
+                       
+int val = 0; // illumination sensor value 0~1023
+float f_val = 0;
+float pre_y = 0;
+float ts = 0.1;
+float tau = 0.5;
+
+float h = 0;
+float t = 0;
 
 void publishData() {
     StaticJsonDocument<512> root;
@@ -30,11 +58,14 @@ void handleUserCommand(JsonDocument* root) {
     
 // USER CODE EXAMPLE : status/change update
 // code if any of device status changes to notify the change
+    Serial.println(d.containsKey("valve"));
     if(d.containsKey("valve")) {
         if (strcmp(d["valve"], "on")) {
             digitalWrite(RELAY, HIGH);
+            Serial.println("valve on");
         } else {
             digitalWrite(RELAY, LOW);
+            Serial.println("valve off");
         }
         lastPublishMillis = - pubInterval;
     }
@@ -52,21 +83,59 @@ void message(char* topic, byte* payload, unsigned int payloadLength) {
     }
 
     handleIOTCommand(topic, &root);
-    if (!strncmp(updateTopic, topic, cmdBaseLen)) {
+    if (strstr(topic, "/device/update")) {
 // USER CODE EXAMPLE : meta data update
 // If any meta data updated on the Internet, it can be stored to local variable to use for the logic
 // in cfg["meta"]["XXXXX"], XXXXX should match to one in the user_html
+        customVar1 = cfg["meta"]["yourVar"];
 // USER CODE EXAMPLE
-    } else if (!strncmp(commandTopic, topic, cmdBaseLen)) {            // strcmp return 0 if both string matches
+    } else if (strstr(topic, "/cmd/")) {            // strcmp return 0 if both string matches
         handleUserCommand(&root);
     }
 }
 
+//filteting illumination sensor value
+void filter(){
+  val = analogRead(ILLUMIPIN);
+  f_val = (tau*pre_y + ts*val) / (tau + ts);
+  pre_y = f_val;
+}
+
+void GetTemperature() {
+    unsigned long currentMillis = millis();
+    if(currentMillis - lastDHTReadMillis >= 2000) {
+        lastDHTReadMillis = currentMillis;
+        h = dht.getHumidity(); // Read humidity (percent)
+        t = dht.getTemperature(); // Read temperature as Fahrenheit
+        sprintf(tdata,"T : %.1f*C",t);
+        sprintf(hdata,"H : %.1f*",h);
+        Serial.println(tdata);
+        Serial.println(hdata);
+    }
+}
 void setup() {
     Serial.begin(115200);
-// USER CODE EXAMPLE : meta data update
+
     pinMode(RELAY, OUTPUT);
-// USER CODE EXAMPLE
+    Wire.begin();
+    lcd.begin(16,2);
+    lcd.setBacklight(255);
+    lcd.home();
+    lcd.clear();
+    lcd.noBlink();
+    lcd.noCursor();
+  
+    dht.setup(14,DHTesp::DHT22);
+
+    pinMode(REDPIN,OUTPUT);
+    pinMode(BLUEPIN,OUTPUT);
+    pinMode(GREENPIN,OUTPUT);
+    pinMode(RELAY, OUTPUT);
+    
+    digitalWrite(REDPIN,LOW);
+    digitalWrite(BLUEPIN,LOW);   
+    digitalWrite(GREENPIN,LOW);
+    digitalWrite(RELAY,LOW);    
 
     initDevice();
     // If not configured it'll be configured and rebooted in the initDevice(),
@@ -92,13 +161,31 @@ void setup() {
 }
 
 void loop() {
+    unsigned int pump_mil = millis();
     if (!client.connected()) {
         iot_connect();
     }
-// USER CODE EXAMPLE : main loop
-//     you can put any main code here, for example, 
-//     the continous data acquistion and local intelligence can be placed here
-// USER CODE EXAMPLE
+
+    filter();
+    if(f_val < 500){
+      digitalWrite(REDPIN,HIGH);
+      digitalWrite(BLUEPIN,HIGH);   
+      digitalWrite(GREENPIN,HIGH);
+    }
+    else{
+      digitalWrite(REDPIN,LOW);
+      digitalWrite(BLUEPIN,LOW);   
+      digitalWrite(GREENPIN,LOW);
+    }
+    GetTemperature();
+
+    lcd.clear();
+    lcd.home();
+    lcd.setCursor(0,0);
+    lcd.print(tdata);
+    lcd.setCursor(0,1);
+    lcd.print(hdata);
+         
     client.loop();
     if ((pubInterval != 0) && (millis() - lastPublishMillis > pubInterval)) {
         publishData();
